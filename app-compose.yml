@@ -1,0 +1,59 @@
+services:
+  backend:
+    image: node:18
+    container_name: backend
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - /opt/docker_apps/app_system/index.js:/app/index.js
+      - /opt/docker_apps/app_system/package.json:/app/package.json
+    working_dir: /app
+    command: ["sh", "-c", "npm install && node index.js"]
+    networks:
+      - app-network
+
+  frontend:
+    image: nginx:latest
+    container_name: frontend
+    ports:
+      - "8080:80"
+    volumes:
+      - /opt/docker_apps/app_system/index.html:/usr/share/nginx/html/index.html
+      - /opt/docker_apps/app_system/nginx.conf:/etc/nginx/conf.d/default.conf
+      - /opt/docker_apps/app_system/nginx_logs/access.log:/var/log/nginx/access.log
+      - /opt/docker_apps/app_system/nginx_logs/error.log:/var/log/nginx/error.log
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  db:
+    image: postgres:16
+    container_name: db
+    environment:
+      - POSTGRES_USER=kfa
+      - POSTGRES_PASSWORD=root
+      - POSTGRES_DB=kfa_db
+    volumes:
+      - /opt/docker_apps/app_system/postgres/data:/var/lib/postgresql/data
+      - /opt/docker_apps/app_system/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kfa -d kfa_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  app-network:
+    external: true
